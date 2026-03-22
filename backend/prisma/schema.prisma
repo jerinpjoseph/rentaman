@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  WORKER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  phone        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  role         Role     @default(CUSTOMER)
+  avatar       String?
+  isActive     Boolean  @default(true) @map("is_active")
+  isEmailVerified        Boolean   @default(false) @map("is_email_verified")
+  emailVerificationToken String?   @map("email_verification_token")
+  passwordResetToken     String?   @map("password_reset_token")
+  passwordResetExpiry    DateTime? @map("password_reset_expiry")
+  refreshToken           String?   @map("refresh_token")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workerProfile      WorkerProfile?
+  bookingsAsCustomer Booking[]      @relation("CustomerBookings")
+  bookingsAsWorker   Booking[]      @relation("WorkerBookings")
+  reviewsGiven       Review[]       @relation("ReviewsGiven")
+  reviewsReceived    Review[]       @relation("ReviewsReceived")
+  notifications      Notification[]
+  conversationsAsOne Conversation[] @relation("ConversationsAsOne")
+  conversationsAsTwo Conversation[] @relation("ConversationsAsTwo")
+  messagesSent       Message[]      @relation("MessagesSent")
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@map("users")
+}
+
+model WorkerProfile {
+  id                 String             @id @default(uuid())
+  userId             String             @unique @map("user_id")
+  bio                String?
+  gender             Gender?
+  dateOfBirth        DateTime?          @map("date_of_birth")
+  skills             String[]
+  hourlyRate         Decimal            @map("hourly_rate") @db.Decimal(10, 2)
+  experienceYears    Int                @default(0) @map("experience_years")
+  idProofUrl         String?            @map("id_proof_url")
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  isAvailable        Boolean            @default(true) @map("is_available")
+  latitude           Float?
+  longitude          Float?
+  address            String?
+  city               String?
+  state              String?
+  pincode            String?
+  avgRating          Decimal            @default(0) @map("avg_rating") @db.Decimal(3, 2)
+  totalReviews       Int                @default(0) @map("total_reviews")
+  totalBookings      Int                @default(0) @map("total_bookings")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([city])
+  @@index([isAvailable])
+  @@index([verificationStatus])
+  @@map("worker_profiles")
+}
+
+model ServiceCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  bookings Booking[]
+
+  @@map("service_categories")
+}
+
+model Booking {
+  id                 String        @id @default(uuid())
+  customerId         String        @map("customer_id")
+  workerId           String?       @map("worker_id")
+  categoryId         String?       @map("category_id")
+  title              String
+  description        String?
+  status             BookingStatus @default(PENDING)
+  scheduledDate      DateTime      @map("scheduled_date")
+  scheduledTime      String        @map("scheduled_time")
+  durationHours      Decimal       @map("duration_hours") @db.Decimal(4, 1)
+  address            String
+  city               String
+  latitude           Float?
+  longitude          Float?
+  totalAmount        Decimal?      @map("total_amount") @db.Decimal(10, 2)
+  platformFeePercent Decimal?      @map("platform_fee_percent") @db.Decimal(5, 2)
+  platformFee        Decimal?      @map("platform_fee") @db.Decimal(10, 2)
+  netAmount          Decimal?      @map("net_amount") @db.Decimal(10, 2)
+  notes              String?
+  paymentStatus      PaymentStatus @default(PENDING) @map("payment_status")
+  paymentId          String?       @map("payment_id")
+  razorpayOrderId    String?       @map("razorpay_order_id")
+  cancellationReason String?       @map("cancellation_reason")
+  startedAt          DateTime?     @map("started_at")
+  completedAt        DateTime?     @map("completed_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  customer User             @relation("CustomerBookings", fields: [customerId], references: [id])
+  worker   User?            @relation("WorkerBookings", fields: [workerId], references: [id])
+  category ServiceCategory? @relation(fields: [categoryId], references: [id])
+  review       Review?
+  conversation Conversation?
+
+  @@index([customerId])
+  @@index([workerId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([city])
+  @@map("bookings")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique @map("booking_id")
+  reviewerId String   @map("reviewer_id")
+  revieweeId String   @map("reviewee_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reviewer User    @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewee User    @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+
+  @@index([revieweeId])
+  @@index([rating])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Conversation {
+  id               String    @id @default(uuid())
+  bookingId        String?   @unique @map("booking_id")
+  participantOneId String    @map("participant_one_id")
+  participantTwoId String    @map("participant_two_id")
+  lastMessageAt    DateTime? @map("last_message_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  booking        Booking? @relation(fields: [bookingId], references: [id])
+  participantOne User     @relation("ConversationsAsOne", fields: [participantOneId], references: [id])
+  participantTwo User     @relation("ConversationsAsTwo", fields: [participantTwoId], references: [id])
+  messages       Message[]
+
+  @@unique([participantOneId, participantTwoId])
+  @@index([participantOneId])
+  @@index([participantTwoId])
+  @@index([bookingId])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(uuid())
+  conversationId String      @map("conversation_id")
+  senderId       String      @map("sender_id")
+  content        String
+  messageType    MessageType @default(TEXT) @map("message_type")
+  isRead         Boolean     @default(false) @map("is_read")
+  readAt         DateTime?   @map("read_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessagesSent", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([conversationId, isRead])
+  @@map("messages")
+}
+
+model PlatformConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_configs")
+}
