@@ -1,17 +1,21 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+  PutBucketPolicyCommand,
 } from '@aws-sdk/client-s3';
 import { v4 as uuid } from 'uuid';
 
 @Injectable()
-export class UploadsService {
+export class UploadsService implements OnModuleInit {
   private s3: S3Client;
   private bucket: string;
   private endpoint: string;
+  private readonly logger = new Logger(UploadsService.name);
 
   constructor(private readonly configService: ConfigService) {
     this.endpoint = this.configService.get<string>('S3_ENDPOINT', 'http://localhost:9000');
@@ -26,6 +30,29 @@ export class UploadsService {
       },
       forcePathStyle: true,
     });
+  }
+
+  async onModuleInit() {
+    try {
+      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      this.logger.log(`Bucket "${this.bucket}" exists`);
+    } catch {
+      this.logger.log(`Creating bucket "${this.bucket}"...`);
+      await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      this.logger.log(`Bucket "${this.bucket}" created`);
+    }
+
+    // Set public-read policy so uploaded files are accessible from the browser
+    const policy = JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [{
+        Effect: 'Allow',
+        Principal: '*',
+        Action: ['s3:GetObject'],
+        Resource: [`arn:aws:s3:::${this.bucket}/*`],
+      }],
+    });
+    await this.s3.send(new PutBucketPolicyCommand({ Bucket: this.bucket, Policy: policy }));
   }
 
   async uploadFile(

@@ -105,10 +105,7 @@ export class WorkersService {
         },
       },
     });
-    if (!profile) {
-      throw new NotFoundException('Worker profile not found');
-    }
-    return profile;
+    return profile || null;
   }
 
   async findAll(query: WorkerQueryDto) {

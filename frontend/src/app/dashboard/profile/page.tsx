@@ -48,8 +48,9 @@ export default function ProfilePage() {
     });
 
     if (user?.role === 'WORKER') {
-      api.get<{ data: WorkerProfile }>('/workers/profile').then((res) => {
+      api.get<{ data: WorkerProfile | null }>('/workers/me').then((res) => {
         const wp = res.data.data;
+        if (!wp) return;
         setWorkerProfile(wp);
         setWorkerForm({
           bio: wp.bio || '',
