@@ -41,7 +41,7 @@ coverage/
 backend/prisma/migrations/**/migration_lock.toml
 
 # Uploads
-uploads/
+/uploads/
 
 # Docker
 pgdata/
